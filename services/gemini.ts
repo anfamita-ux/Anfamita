@@ -4,11 +4,59 @@ import { LectureContent, QuizQuestion, UploadedFile } from "../types";
 const apiKey = process.env.API_KEY || '';
 const ai = new GoogleGenAI({ apiKey });
 
+// --- Chapter Extraction ---
+
+export const extractChapters = async (files: UploadedFile[]): Promise<string[]> => {
+  const model = "gemini-3-pro-preview"; // High context window for full books
+
+  const fileParts = files.map(f => ({
+    inlineData: {
+      mimeType: f.mimeType,
+      data: f.data
+    }
+  }));
+
+  const prompt = `
+    Analyze the provided document(s). 
+    Identify the Table of Contents or the main chapter structure. 
+    List the titles of all the chapters or main sections found.
+    Return the result as a JSON object with a single property 'chapters' containing an array of strings.
+    If no clear chapters are found, list the main topic headings.
+  `;
+
+  const response = await ai.models.generateContent({
+    model,
+    contents: {
+      role: 'user',
+      parts: [...fileParts, { text: prompt }]
+    },
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          chapters: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING }
+          }
+        },
+        required: ["chapters"]
+      }
+    }
+  });
+
+  const text = response.text;
+  if (!text) return [];
+  const result = JSON.parse(text);
+  return result.chapters || [];
+};
+
 // --- Lecture Generation ---
 
 export const generateLecture = async (
   files: UploadedFile[],
-  language: string
+  language: string,
+  focusTopic?: string
 ): Promise<LectureContent> => {
   const model = "gemini-3-pro-preview";
 
@@ -19,11 +67,24 @@ export const generateLecture = async (
     }
   }));
 
-  const prompt = `
+  let prompt = `
     You are a distinguished university professor. 
-    Analyze the provided book pages (Language: ${language}). 
+    Analyze the provided book pages/PDF (Language: ${language}). 
     Create a comprehensive lecture plan in ENGLISH to teach this material to a student.
-    
+  `;
+
+  if (focusTopic) {
+    prompt += `
+    CRITICAL INSTRUCTION: The student wants to study a specific chapter: "${focusTopic}".
+    Ignore other chapters. Focus the entire lecture, summary, and visual aids ONLY on explaining "${focusTopic}" in depth.
+    `;
+  } else {
+    prompt += `
+    Cover the main concepts found in the uploaded content.
+    `;
+  }
+
+  prompt += `
     Structure the response as a JSON object with a title, a brief summary, and a list of sections.
     For each section, provide a heading, a detailed explanation (content), and a specific prompt to generate a visual aid (diagram, chart, or illustration) that explains the concept.
     

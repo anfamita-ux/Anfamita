@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { AppState, UploadedFile, Language, LectureContent, QuizQuestion } from './types';
-import { generateLecture, generateLectureImage, generateQuiz, playTTS } from './services/gemini';
+import { generateLecture, generateLectureImage, generateQuiz, playTTS, extractChapters } from './services/gemini';
 import LiveProfessor from './components/LiveProfessor';
-import { BookOpen, Upload, Play, CheckCircle, GraduationCap, ArrowRight, Loader, Image as ImageIcon, MessageSquare, Volume2, StopCircle, FileText } from 'lucide-react';
+import { BookOpen, Upload, Play, CheckCircle, GraduationCap, ArrowRight, Loader, Image as ImageIcon, MessageSquare, Volume2, StopCircle, FileText, Search, List } from 'lucide-react';
 
 export default function App() {
   const [state, setState] = useState<AppState>(AppState.UPLOAD);
@@ -11,6 +11,10 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
   
+  // Chapter Selection Data
+  const [detectedChapters, setDetectedChapters] = useState<string[]>([]);
+  const [selectedChapter, setSelectedChapter] = useState<string>('');
+
   // Data
   const [lecture, setLecture] = useState<LectureContent | null>(null);
   const [generatedImages, setGeneratedImages] = useState<Record<number, string>>({});
@@ -40,6 +44,9 @@ export default function App() {
           });
           if (newFiles.length === e.target.files!.length) {
              setFiles(prev => [...prev, ...newFiles]);
+             // Reset chapter selection when new files are added
+             setDetectedChapters([]);
+             setSelectedChapter('');
           }
         };
         reader.readAsDataURL(file);
@@ -47,13 +54,31 @@ export default function App() {
     }
   };
 
+  const handleScanChapters = async () => {
+    if (files.length === 0) return;
+    setIsLoading(true);
+    setLoadingMessage("Scanning book structure...");
+    try {
+      const chapters = await extractChapters(files);
+      setDetectedChapters(chapters);
+      if (chapters.length === 0) {
+        alert("No clear chapters found. You can still generate a lecture for the whole file.");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Failed to scan chapters.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const startLectureGeneration = async () => {
     if (files.length === 0) return;
     setIsLoading(true);
-    setLoadingMessage("Professor is analyzing your books...");
+    setLoadingMessage(selectedChapter ? `Preparing lecture on "${selectedChapter}"...` : "Professor is analyzing your books...");
     
     try {
-      const content = await generateLecture(files, selectedLanguage);
+      const content = await generateLecture(files, selectedLanguage, selectedChapter);
       setLecture(content);
       
       // Start Image Generation in background
@@ -140,7 +165,11 @@ export default function App() {
           <h1 className="text-xl font-serif font-bold tracking-tight text-stone-800">ProfAI</h1>
         </div>
         {state !== AppState.UPLOAD && (
-           <button onClick={() => setState(AppState.UPLOAD)} className="text-sm font-medium text-stone-500 hover:text-indigo-600 transition-colors">
+           <button onClick={() => {
+             setState(AppState.UPLOAD);
+             setDetectedChapters([]);
+             setSelectedChapter('');
+           }} className="text-sm font-medium text-stone-500 hover:text-indigo-600 transition-colors">
              New Class
            </button>
         )}
@@ -156,11 +185,11 @@ export default function App() {
                 Turn your textbooks into <br/> <span className="text-indigo-600">interactive masterclasses</span>.
               </h2>
               <p className="text-lg text-stone-600">
-                Upload photos or PDFs of any book, and our AI Professor will teach you the material, generate diagrams, and quiz your knowledge.
+                Upload photos or PDFs of any book. Our AI Professor will scan for chapters, let you choose what to learn, and teach you with voice.
               </p>
             </div>
 
-            <div className="w-full max-w-md bg-white p-8 rounded-2xl shadow-xl shadow-stone-200/50 border border-stone-100">
+            <div className="w-full max-w-lg bg-white p-8 rounded-2xl shadow-xl shadow-stone-200/50 border border-stone-100">
               <div className="space-y-6">
                 
                 {/* File Input */}
@@ -196,6 +225,53 @@ export default function App() {
                     </div>
                   </div>
                 )}
+                
+                {/* Chapter Scan & Selection */}
+                {files.length > 0 && (
+                  <div className="space-y-3">
+                     {detectedChapters.length === 0 ? (
+                        <button
+                          onClick={handleScanChapters}
+                          className="w-full py-2 bg-stone-100 text-stone-700 hover:bg-stone-200 rounded-lg font-medium text-sm transition-colors flex items-center justify-center gap-2"
+                        >
+                          <Search className="w-4 h-4" />
+                          Scan for Chapters
+                        </button>
+                     ) : (
+                       <div className="bg-stone-50 border border-stone-200 rounded-xl p-4 max-h-48 overflow-y-auto">
+                         <h3 className="text-xs font-bold uppercase text-stone-400 mb-2 flex items-center gap-1">
+                           <List className="w-3 h-3" /> Select a Chapter
+                         </h3>
+                         <div className="space-y-1">
+                           <label className="flex items-center gap-3 p-2 rounded-lg hover:bg-white cursor-pointer transition-colors">
+                              <input 
+                                type="radio" 
+                                name="chapter" 
+                                value="" 
+                                checked={selectedChapter === ''}
+                                onChange={() => setSelectedChapter('')}
+                                className="text-indigo-600 focus:ring-indigo-500"
+                              />
+                              <span className="text-sm font-medium text-stone-700">Teach Full Book Content</span>
+                           </label>
+                           {detectedChapters.map((chap, idx) => (
+                             <label key={idx} className="flex items-center gap-3 p-2 rounded-lg hover:bg-white cursor-pointer transition-colors">
+                                <input 
+                                  type="radio" 
+                                  name="chapter" 
+                                  value={chap}
+                                  checked={selectedChapter === chap}
+                                  onChange={() => setSelectedChapter(chap)}
+                                  className="text-indigo-600 focus:ring-indigo-500"
+                                />
+                                <span className="text-sm text-stone-700">{chap}</span>
+                             </label>
+                           ))}
+                         </div>
+                       </div>
+                     )}
+                  </div>
+                )}
 
                 {/* Language Select */}
                 <div>
@@ -219,7 +295,7 @@ export default function App() {
                   `}
                 >
                   <BookOpen className="w-5 h-5" />
-                  Start Lecture
+                  {selectedChapter ? "Teach This Chapter" : "Start Lecture"}
                 </button>
               </div>
             </div>
@@ -234,7 +310,7 @@ export default function App() {
             <div className="bg-white rounded-3xl p-8 md:p-12 shadow-sm border border-stone-100 relative overflow-hidden">
               <div className="relative z-10 max-w-3xl">
                 <span className="inline-block px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full text-xs font-bold uppercase tracking-wide mb-4">
-                  Current Lesson
+                  {selectedChapter ? "Chapter Focus" : "Full Lecture"}
                 </span>
                 <h2 className="text-4xl md:text-5xl font-serif font-medium text-stone-900 mb-6">{lecture.title}</h2>
                 <p className="text-xl text-stone-600 leading-relaxed">{lecture.summary}</p>
@@ -380,6 +456,8 @@ export default function App() {
                     setQuizAnswers({});
                     setQuizSubmitted(false);
                     setGeneratedImages({});
+                    setDetectedChapters([]);
+                    setSelectedChapter('');
                   }}
                   className="inline-block px-6 py-2 bg-white/20 hover:bg-white/30 rounded-full mt-4 transition-colors"
                  >
