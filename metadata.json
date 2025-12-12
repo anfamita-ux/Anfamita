@@ -1,0 +1,7 @@
+{
+  "name": "Copy of ProfAI: Interactive Lecture Assistant",
+  "description": "Upload book pages to generate interactive lectures, visuals, and quizzes. Chat with an AI professor in real-time.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
