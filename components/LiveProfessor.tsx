@@ -108,12 +108,15 @@ const LiveProfessor: React.FC<LiveProfessorProps> = ({ files, onClose, contextSu
             // Send initial images as context
             sessionPromiseRef.current?.then(session => {
               files.forEach(file => {
-                 session.sendRealtimeInput({
-                   media: {
-                     mimeType: file.mimeType,
-                     data: file.data
-                   }
-                 });
+                 // Only send images to the live API, as PDF streaming is not supported on this endpoint
+                 if (file.mimeType.startsWith('image/')) {
+                   session.sendRealtimeInput({
+                     media: {
+                       mimeType: file.mimeType,
+                       data: file.data
+                     }
+                   });
+                 }
               });
               // Send a "hello" trigger to let the model know context is ready
               session.sendRealtimeInput({

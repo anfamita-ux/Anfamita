@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { AppState, UploadedFile, Language, LectureContent, QuizQuestion } from './types';
 import { generateLecture, generateLectureImage, generateQuiz, playTTS } from './services/gemini';
 import LiveProfessor from './components/LiveProfessor';
-import { BookOpen, Upload, Play, CheckCircle, GraduationCap, ArrowRight, Loader, Image as ImageIcon, MessageSquare, Volume2, StopCircle } from 'lucide-react';
+import { BookOpen, Upload, Play, CheckCircle, GraduationCap, ArrowRight, Loader, Image as ImageIcon, MessageSquare, Volume2, StopCircle, FileText } from 'lucide-react';
 
 export default function App() {
   const [state, setState] = useState<AppState>(AppState.UPLOAD);
@@ -156,7 +156,7 @@ export default function App() {
                 Turn your textbooks into <br/> <span className="text-indigo-600">interactive masterclasses</span>.
               </h2>
               <p className="text-lg text-stone-600">
-                Upload photos of any book, and our AI Professor will teach you the material, generate diagrams, and quiz your knowledge.
+                Upload photos or PDFs of any book, and our AI Professor will teach you the material, generate diagrams, and quiz your knowledge.
               </p>
             </div>
 
@@ -168,14 +168,14 @@ export default function App() {
                   <input 
                     type="file" 
                     multiple 
-                    accept="image/*" 
+                    accept="image/*,application/pdf" 
                     onChange={handleFileUpload}
                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                   />
                   <div className="border-2 border-dashed border-stone-300 rounded-xl p-8 flex flex-col items-center justify-center text-center group-hover:border-indigo-500 group-hover:bg-indigo-50/50 transition-all">
                     <Upload className="w-10 h-10 text-stone-400 group-hover:text-indigo-500 mb-3" />
-                    <p className="font-medium text-stone-700">Click to upload book pages</p>
-                    <p className="text-sm text-stone-400 mt-1">Supports JPG, PNG</p>
+                    <p className="font-medium text-stone-700">Click to upload book pages or PDFs</p>
+                    <p className="text-sm text-stone-400 mt-1">Supports JPG, PNG, PDF</p>
                   </div>
                 </div>
 
@@ -183,12 +183,16 @@ export default function App() {
                 {files.length > 0 && (
                   <div className="flex gap-2 overflow-x-auto pb-2">
                     {files.map((f, i) => (
-                      <div key={i} className="w-16 h-16 shrink-0 rounded-lg overflow-hidden border border-stone-200">
-                         <img src={`data:${f.mimeType};base64,${f.data}`} className="w-full h-full object-cover" alt="preview" />
+                      <div key={i} className="w-16 h-16 shrink-0 rounded-lg overflow-hidden border border-stone-200 bg-stone-50 flex items-center justify-center">
+                        {f.mimeType.startsWith('image/') ? (
+                           <img src={`data:${f.mimeType};base64,${f.data}`} className="w-full h-full object-cover" alt="preview" />
+                        ) : (
+                           <FileText className="w-8 h-8 text-red-500" />
+                        )}
                       </div>
                     ))}
                     <div className="flex items-center justify-center w-16 h-16 text-xs text-stone-500 bg-stone-100 rounded-lg">
-                      {files.length} pages
+                      {files.length} files
                     </div>
                   </div>
                 )}
